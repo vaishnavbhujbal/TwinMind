@@ -1,53 +1,29 @@
-import { useEffect, useRef, useState } from "react";
 import { useSession } from "../context/SessionContext";
 import { useSettings } from "../context/SettingsContext";
-import { useAudioRecorder } from "../hooks/useAudioRecorder";
-import { ApiError, transcribeChunk } from "../libs/api";
 
-export default function MicColumn() {
-  const { settings, hasApiKey } = useSettings();
-  const { transcript, appendTranscript } = useSession();
+type MicColumnProps = {
+  isRecording: boolean;
+  transcribing: number;
+  recorderError: string | null;
+  transcribeError: string | null;
+  onToggleMic: () => void;
+};
 
-  const [transcribing, setTranscribing] = useState(0); // in-flight count
-  const [lastError, setLastError] = useState<string | null>(null);
-  const scrollRef = useRef<HTMLDivElement | null>(null);
+export default function MicColumn({
+  isRecording,
+  transcribing,
+  recorderError,
+  transcribeError,
+  onToggleMic,
+}: MicColumnProps) {
+  const { hasApiKey } = useSettings();
+  const { transcript } = useSession();
 
-  // Stable handler for each audio chunk emitted by the recorder.
-  const handleChunk = async (blob: Blob) => {
-    if (!hasApiKey) {
-      setLastError("Add your Groq API key in Settings to begin.");
-      return;
-    }
-    setTranscribing((n) => n + 1);
-    setLastError(null);
-    try {
-      const { text } = await transcribeChunk(settings.groq_api_key, blob);
-      if (text) appendTranscript(text);
-    } catch (e) {
-      const msg = e instanceof ApiError ? e.detail : (e as Error).message;
-      setLastError(`Transcription failed: ${msg}`);
-    } finally {
-      setTranscribing((n) => Math.max(0, n - 1));
-    }
-  };
+  // Newest transcript first — matches the suggestions column ordering and
+  // means the latest chunk is always visible at the top without needing to
+  // scroll. Older chunks are accessible by scrolling down.
+  const reversedTranscript = [...transcript].reverse();
 
-  const { isRecording, error: recorderError, start, stop } = useAudioRecorder({
-    onChunk: handleChunk,
-    chunkMs: 30_000,
-  });
-
-  // Auto-scroll transcript to the latest chunk
-  useEffect(() => {
-    const el = scrollRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [transcript.length]);
-
-  const toggleMic = () => {
-    if (isRecording) stop();
-    else start();
-  };
-
-  // Compose the header status badge
   const statusLabel = isRecording
     ? transcribing > 0
       ? "Recording • Transcribing"
@@ -57,9 +33,8 @@ export default function MicColumn() {
     : "Idle";
 
   return (
-    <section className="flex flex-col h-full border-r border-border bg-bg-elevated">
-      {/* Column header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+    <section className="flex flex-col h-full min-h-0 border-r border-border bg-bg-elevated">
+      <div className="flex-shrink-0 flex items-center justify-between px-4 py-3 border-b border-border">
         <h2 className="text-xs font-semibold tracking-wider text-text-muted uppercase">
           1. Mic &amp; Transcript
         </h2>
@@ -72,11 +47,10 @@ export default function MicColumn() {
         </span>
       </div>
 
-      {/* Mic button + hint */}
-      <div className="px-4 py-5 border-b border-border">
+      <div className="flex-shrink-0 px-4 py-5 border-b border-border">
         <div className="flex items-center gap-3">
           <button
-            onClick={toggleMic}
+            onClick={onToggleMic}
             disabled={!hasApiKey}
             aria-label={isRecording ? "Stop recording" : "Start recording"}
             className={`flex-shrink-0 w-12 h-12 rounded-full flex items-center justify-center transition-colors ${
@@ -103,44 +77,49 @@ export default function MicColumn() {
         </div>
       </div>
 
-      {/* Errors */}
-      {(lastError || recorderError) && (
-        <div className="px-4 py-3 border-b border-border bg-accent-orange/10">
+      {(recorderError || transcribeError) && (
+        <div className="flex-shrink-0 px-4 py-3 border-b border-border bg-accent-orange/10">
           <p className="text-xs text-accent-orange">
-            {recorderError ?? lastError}
+            {recorderError ?? transcribeError}
           </p>
         </div>
       )}
 
-      {/* Transcript body */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto p-4">
+      <div className="flex-1 min-h-0 overflow-y-auto p-4">
         {transcript.length === 0 ? (
           <div className="h-full flex items-center justify-center">
             <p className="text-sm text-text-faint">
               {isRecording
-                ? "Listening… first chunk appears in ~30s."
+                ? "Listening… first chunk appears here."
                 : "No transcript yet — start the mic."}
             </p>
           </div>
         ) : (
           <div className="space-y-3">
-            {transcript.map((chunk) => (
-              <div key={chunk.id} className="text-sm leading-relaxed">
-                <div className="text-[10px] uppercase tracking-wider text-text-faint mb-0.5">
-                  {new Date(chunk.created_at).toLocaleTimeString([], {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                    second: "2-digit",
-                  })}
-                </div>
-                <div className="text-text">{chunk.text}</div>
-              </div>
-            ))}
             {transcribing > 0 && (
               <div className="text-xs text-text-faint italic">
                 Transcribing latest chunk…
               </div>
             )}
+            {reversedTranscript.map((chunk, idx) => (
+              <div key={chunk.id} className="text-sm leading-relaxed">
+                <div className="flex items-center gap-2 text-[10px] uppercase tracking-wider text-text-faint mb-0.5">
+                  <span>
+                    {new Date(chunk.created_at).toLocaleTimeString([], {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                      second: "2-digit",
+                    })}
+                  </span>
+                  {idx === 0 && (
+                    <span className="px-1.5 py-0.5 rounded-sm bg-accent-blue/20 text-accent-blue">
+                      Latest
+                    </span>
+                  )}
+                </div>
+                <div className="text-text">{chunk.text}</div>
+              </div>
+            ))}
           </div>
         )}
       </div>

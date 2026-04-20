@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from datetime import datetime, timezone
 
-from .routes import transcribe
+from .routes import suggestions, transcribe
 
 
 app = FastAPI(
@@ -40,3 +40,4 @@ def root():
 
 # Register routers
 app.include_router(transcribe.router)
+app.include_router(suggestions.router)

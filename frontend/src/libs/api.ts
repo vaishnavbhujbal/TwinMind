@@ -84,3 +84,49 @@ export async function transcribeChunk(
   if (!res.ok) return parseError(res);
   return res.json();
 }
+
+// --- /api/suggestions --------------------------------------------------------
+
+export type SuggestionTypeApi =
+  | "question"
+  | "talking_point"
+  | "answer"
+  | "fact_check"
+  | "clarifying_info";
+
+export type SuggestionFromApi = {
+  type: SuggestionTypeApi;
+  preview: string;
+  detail_seed: string;
+};
+
+export type SuggestionsResponse = {
+  suggestions: SuggestionFromApi[];
+};
+
+export type ReasoningEffortApi = "low" | "medium" | "high";
+
+export async function getSuggestions(
+  apiKey: string,
+  transcript: string,
+  prompt: string,
+  reasoningEffort: ReasoningEffortApi = "low",
+): Promise<SuggestionsResponse> {
+  if (!apiKey) throw new ApiError(401, "Missing Groq API key.");
+
+  const res = await fetch(`${API_BASE}/api/suggestions`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      transcript,
+      prompt,
+      reasoning_effort: reasoningEffort,
+    }),
+  });
+
+  if (!res.ok) return parseError(res);
+  return res.json();
+}
