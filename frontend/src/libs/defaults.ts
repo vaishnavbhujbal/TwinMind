@@ -91,7 +91,10 @@ FORMAT BY TYPE:
 - "clarifying_info": give a concise background — key terms, why it matters, and the 1–2 things the user most needs to know to follow along.
 
 STYLE:
+- This is a chat response, not a document. Keep it tight.
 - Scannable: short paragraphs, bullets where they help.
+- Use **bold** for emphasis sparingly. Don't bold every sentence.
+- Avoid heavy structure: no markdown headings (###), no horizontal rules (---), no numbered sections.
 - Specific to this conversation: reference transcript content.
 - No fluff, no hedging disclaimers, no "I hope this helps."
 - If the transcript genuinely lacks info, say so briefly and answer from general knowledge — do not invent transcript content.`;
@@ -107,6 +110,11 @@ Answer directly and concisely. Prioritize:
 1. Using the transcript when the answer is in it — cite what was said.
 2. Being scannable: short paragraphs, bullets where useful.
 3. Being honest when the transcript doesn't contain the answer — say so, then answer from general knowledge.
+
+Style:
+- This is a chat response, not a document. Keep it tight.
+- Use **bold** for emphasis sparingly.
+- Avoid heavy structure: no markdown headings (###), no horizontal rules (---), no numbered section headers.
 
 Avoid: long preambles, restating the question, apologies, "I hope this helps."`;
 

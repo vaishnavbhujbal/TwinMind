@@ -8,7 +8,9 @@ import { useSettings } from "./context/SettingsContext";
 import { useSession } from "./context/SessionContext";
 import { useAudioRecorder } from "./hooks/useAudioRecorder";
 import { useSuggestions } from "./hooks/useSuggestions";
+import { useChat } from "./hooks/useChat";
 import { ApiError, transcribeChunk } from "./libs/api";
+import type { Suggestion } from "./types";
 
 function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -19,13 +21,7 @@ function App() {
   const [transcribing, setTranscribing] = useState(0);
   const [transcribeError, setTranscribeError] = useState<string | null>(null);
 
-  // Track whether the next chunk is a manual-reload flush so we can chain
-  // the suggestions fetch AFTER the transcript appends (spec: "manually
-  // updates transcript then suggestions").
   const pendingManualReloadRef = useRef<boolean>(false);
-
-  // fetchSuggestions is defined below via useSuggestions(). A ref lets us
-  // call the latest closure from inside handleChunk without recreating it.
   const fetchSuggestionsRef = useRef<(() => Promise<void>) | null>(null);
 
   const handleChunk = useCallback(
@@ -50,8 +46,6 @@ function App() {
       } finally {
         setTranscribing((n) => Math.max(0, n - 1));
         if (wasManualReload) {
-          // queueMicrotask lets React flush the transcript append before we
-          // read transcriptText inside fetchSuggestions.
           queueMicrotask(() => {
             void fetchSuggestionsRef.current?.();
           });
@@ -79,14 +73,10 @@ function App() {
     fetchSuggestions,
   } = useSuggestions();
 
-  // Keep the ref pointed at the latest fetchSuggestions closure.
   useEffect(() => {
     fetchSuggestionsRef.current = fetchSuggestions;
   }, [fetchSuggestions]);
 
-  // Auto-refresh timer: while recording, flush the current take every N
-  // seconds so transcript is current, and handleChunk will chain into
-  // suggestions via the pendingManualReloadRef flag.
   useEffect(() => {
     if (!isRecording) return;
     const ms = Math.max(10, settings.auto_refresh_seconds) * 1000;
@@ -99,10 +89,8 @@ function App() {
     return () => window.clearInterval(id);
   }, [isRecording, settings.auto_refresh_seconds, flush]);
 
-  // --- Manual reload --------------------------------------------------------
   const handleReload = useCallback(() => {
     if (!hasApiKey) return;
-
     if (isRecording) {
       pendingManualReloadRef.current = true;
       flush();
@@ -111,16 +99,33 @@ function App() {
     }
   }, [hasApiKey, isRecording, flush, fetchSuggestions]);
 
-  // --- Mic toggle -----------------------------------------------------------
   const handleToggleMic = useCallback(() => {
     if (isRecording) stop();
     else void start();
   }, [isRecording, start, stop]);
 
-  // --- Suggestion click (Step 7 will wire to chat) --------------------------
-  const handleSuggestionClick = useCallback(() => {
-    console.log("suggestion clicked");
-  }, []);
+  // --- Chat -----------------------------------------------------------------
+  const {
+    isStreaming: chatStreaming,
+    error: chatError,
+    sendMessage,
+    expandSuggestion,
+    stopStreaming: stopChatStreaming,
+  } = useChat();
+
+  const handleSuggestionClick = useCallback(
+    (sug: Suggestion) => {
+      void expandSuggestion(sug);
+    },
+    [expandSuggestion],
+  );
+
+  const handleChatSend = useCallback(
+    (text: string) => {
+      void sendMessage(text);
+    },
+    [sendMessage],
+  );
 
   // --- Export (Step 8) ------------------------------------------------------
   const handleExport = useCallback(() => {
@@ -163,7 +168,12 @@ function App() {
           onReload={handleReload}
           onSuggestionClick={handleSuggestionClick}
         />
-        <ChatColumn />
+        <ChatColumn
+          isStreaming={chatStreaming}
+          error={chatError}
+          onSend={handleChatSend}
+          onStop={stopChatStreaming}
+        />
       </main>
 
       <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />

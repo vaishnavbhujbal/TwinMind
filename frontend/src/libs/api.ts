@@ -130,3 +130,145 @@ export async function getSuggestions(
   if (!res.ok) return parseError(res);
   return res.json();
 }
+
+// --- /api/chat (streaming) --------------------------------------------------
+
+export type ChatTurnApi = {
+  role: "user" | "assistant";
+  content: string;
+};
+
+export type StreamChatParams = {
+  apiKey: string;
+  transcript: string;
+  history: ChatTurnApi[];
+  message: string;
+  prompt: string;
+  reasoningEffort: ReasoningEffortApi;
+  onToken: (token: string) => void;
+  onError: (message: string) => void;
+  onDone: () => void;
+  /** Optional: AbortSignal to cancel the stream (e.g. user hits stop). */
+  signal?: AbortSignal;
+};
+
+/**
+ * POST /api/chat with SSE streaming. Calls onToken per chunk, onDone when
+ * the server sends [DONE], onError if the stream reports an error mid-way.
+ */
+export async function streamChat(params: StreamChatParams): Promise<void> {
+  const {
+    apiKey,
+    transcript,
+    history,
+    message,
+    prompt,
+    reasoningEffort,
+    onToken,
+    onError,
+    onDone,
+    signal,
+  } = params;
+
+  if (!apiKey) {
+    onError("Missing Groq API key.");
+    onDone();
+    return;
+  }
+
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}/api/chat`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        transcript,
+        history,
+        message,
+        prompt,
+        reasoning_effort: reasoningEffort,
+      }),
+      signal,
+    });
+  } catch (e) {
+    if ((e as Error).name === "AbortError") {
+      onDone();
+      return;
+    }
+    onError((e as Error).message);
+    onDone();
+    return;
+  }
+
+  if (!res.ok) {
+    // Try to surface the backend's detail payload if it's a clean HTTP error.
+    let detail = res.statusText;
+    try {
+      const body = await res.json();
+      detail = body.detail ?? body.error ?? detail;
+    } catch {
+      /* non-JSON body */
+    }
+    onError(`HTTP ${res.status}: ${detail}`);
+    onDone();
+    return;
+  }
+
+  if (!res.body) {
+    onError("Response has no body.");
+    onDone();
+    return;
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+
+      // SSE frames are delimited by a blank line. Split on \n\n so we don't
+      // process a partial frame.
+      const parts = buffer.split("\n\n");
+      // Keep the last (possibly incomplete) part back in the buffer.
+      buffer = parts.pop() ?? "";
+
+      for (const frame of parts) {
+        // A frame may contain multiple "data: ..." lines; handle each.
+        for (const line of frame.split("\n")) {
+          if (!line.startsWith("data: ")) continue;
+          const payload = line.slice("data: ".length).trim();
+          if (payload === "[DONE]") {
+            onDone();
+            return;
+          }
+          try {
+            const obj = JSON.parse(payload) as
+              | { token?: string; error?: string };
+            if (obj.error) {
+              onError(obj.error);
+              continue;
+            }
+            if (typeof obj.token === "string") {
+              onToken(obj.token);
+            }
+          } catch {
+            // Malformed frame — skip; don't blow up the stream.
+          }
+        }
+      }
+    }
+  } catch (e) {
+    if ((e as Error).name !== "AbortError") {
+      onError((e as Error).message);
+    }
+  } finally {
+    onDone();
+  }
+}

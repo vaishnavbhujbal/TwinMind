@@ -143,6 +143,7 @@ def chat_completion_json(
 
 # --- Chat completions (streaming) --------------------------------------------
 
+
 def chat_completion_stream(
     api_key: str,
     system_prompt: str,
@@ -155,6 +156,12 @@ def chat_completion_stream(
 
     Used for the chat route and detailed suggestion expansions — first-token
     latency matters for UX.
+
+    We decode the byte stream as UTF-8 explicitly. Passing decode_unicode=True
+    to iter_lines() makes `requests` guess the encoding from response headers,
+    and if Groq's SSE response doesn't include a charset it falls back to
+    Latin-1, which mangles multi-byte UTF-8 characters (em dashes, curly
+    quotes, bullets) into sequences like â≡≡ on the client.
     """
     url = f"{GROQ_BASE_URL}/chat/completions"
 
@@ -184,16 +191,23 @@ def chat_completion_stream(
         body_text = res.text[:300]
         raise GroqError(f"Groq chat stream failed: {body_text}", status_code=res.status_code)
 
-    # Groq streams Server-Sent Events. Lines look like:
-    #   data: {"choices":[{"delta":{"content":"Hello"}}]}
-    #   data: [DONE]
-    for raw_line in res.iter_lines(decode_unicode=True):
+    # Iterate raw bytes and decode as UTF-8 ourselves. iter_lines() without
+    # decode_unicode returns bytes; we split on \n and decode each line.
+    for raw_line in res.iter_lines(decode_unicode=False):
         if not raw_line:
             continue
-        if not raw_line.startswith("data:"):
+
+        try:
+            line = raw_line.decode("utf-8")
+        except UnicodeDecodeError:
+            # Extremely rare (Groq always sends UTF-8), but don't kill the
+            # stream if one chunk is malformed.
             continue
 
-        payload = raw_line[len("data:"):].strip()
+        if not line.startswith("data:"):
+            continue
+
+        payload = line[len("data:"):].strip()
         if payload == "[DONE]":
             return
 
@@ -204,5 +218,4 @@ def chat_completion_stream(
             if content:
                 yield content
         except (ValueError, KeyError, IndexError):
-            # Skip malformed chunks but keep streaming.
             continue
