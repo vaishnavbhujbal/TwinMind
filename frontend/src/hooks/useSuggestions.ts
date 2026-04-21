@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { ApiError, getSuggestions } from "../libs/api";
+import { ApiError, getSuggestions } from "../lib/api";
 import { useSettings } from "../context/SettingsContext";
 import { useSession } from "../context/SessionContext";
 import type { SuggestionBatch } from "../types";

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { useSession } from "../context/SessionContext";
 import { useSettings } from "../context/SettingsContext";
-import { renderMarkdown } from "../libs/markdown";
+import { renderMarkdown } from "../lib/markdown";
 import type { ChatMessage } from "../types";
 
 type ChatColumnProps = {

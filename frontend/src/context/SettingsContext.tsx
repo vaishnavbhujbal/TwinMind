@@ -8,8 +8,8 @@ import {
   type ReactNode,
 } from "react";
 import type { Settings } from "../types";
-import { DEFAULT_SETTINGS } from "../libs/defaults";
-import { loadSettings, saveSettings } from "../libs/storage";
+import { DEFAULT_SETTINGS } from "../lib/defaults";
+import { loadSettings, saveSettings } from "../lib/storage";
 
 type SettingsContextValue = {
   settings: Settings;

@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from "react";
-import { streamChat, type ChatTurnApi } from "../libs/api";
+import { streamChat, type ChatTurnApi } from "../lib/api";
 import { useSettings } from "../context/SettingsContext";
 import { useSession } from "../context/SessionContext";
 import type { ChatMessage, Suggestion } from "../types";

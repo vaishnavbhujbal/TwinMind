@@ -9,13 +9,14 @@ import { useSession } from "./context/SessionContext";
 import { useAudioRecorder } from "./hooks/useAudioRecorder";
 import { useSuggestions } from "./hooks/useSuggestions";
 import { useChat } from "./hooks/useChat";
-import { ApiError, transcribeChunk } from "./libs/api";
+import { ApiError, transcribeChunk } from "./lib/api";
 import type { Suggestion } from "./types";
+import { buildExport, downloadSessionJson } from "./lib/export";
 
 function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const { settings, hasApiKey } = useSettings();
-  const { appendTranscript } = useSession();
+  const { appendTranscript, transcript, batches, chat, sessionStartedAt } = useSession();
 
   // --- Transcription state ---------------------------------------------------
   const [transcribing, setTranscribing] = useState(0);
@@ -128,9 +129,18 @@ function App() {
   );
 
   // --- Export (Step 8) ------------------------------------------------------
-  const handleExport = useCallback(() => {
-    console.log("export session");
-  }, []);
+  // --- Export --------------------------------------------------------------
+
+
+const handleExport = useCallback(() => {
+  const data = buildExport({
+    sessionStartedAt,
+    transcript,
+    batches,
+    chat,
+  });
+  downloadSessionJson(data);
+}, [sessionStartedAt, transcript, batches, chat]);
 
   return (
     <div className="h-screen flex flex-col bg-bg text-text">
