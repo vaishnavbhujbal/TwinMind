@@ -1,8 +1,7 @@
-# TwinMind Copilot
+# TwinMind - Live Meeting Copilot
 
 A live meeting copilot that listens to your microphone, transcribes the conversation, and surfaces three context-aware suggestions every ~30 seconds. Click any suggestion to expand it into a detailed chat answer, or type your own questions while the meeting is happening.
 
-Built as a take-home assignment for the TwinMind Full Stack / Prompt Engineer role.
 
 ## Live Demo
 
@@ -26,7 +25,10 @@ Audio is captured by the browser's MediaRecorder, chunked into 30-second WebM bl
 
 ### Why a real backend instead of calling Groq directly from the browser
 
-Three reasons. First, Groq's CORS configuration on the streaming endpoint is finicky and sometimes drops the SSE response in browsers — having our own backend means we control CORS. Second, the spec lists "Full-stack engineering" as criterion #4, so having a real Python service with typed routes earns points the frontend-only approach wouldn't. Third, it gives us a single place to do server-side normalization — for example, the suggestions endpoint clamps responses to exactly 3 suggestions and validates types, so the model can't break the UI by returning 2 or 4.
+Three reasons. 
+- First, Groq's CORS configuration on the streaming endpoint is finicky and sometimes drops the SSE response in browsers — having our own backend means we control CORS. 
+- Second, the spec lists "Full-stack engineering" as criterion #4, so having a real Python service with typed routes earns points the frontend-only approach wouldn't.
+- Third, it gives us a single place to do server-side normalization — for example, the suggestions endpoint clamps responses to exactly 3 suggestions and validates types, so the model can't break the UI by returning 2 or 4.
 
 The cost is one additional network hop per call (~50-100ms). Worth it for the reliability and architecture story.
 
@@ -122,27 +124,6 @@ Five anti-patterns are forbidden explicitly: meta-instruction phrasing ("Conside
 
 **JSON mode + server-side normalization.** The Groq call uses `response_format: json_object`. The backend then validates the response and clamps to exactly 3 suggestions, validates types are in our enum, and pads with a fallback if fewer were returned. The model can't break the UI by returning malformed output.
 
-### Detailed answer prompt — design choices
-
-This expanded after observing two failure modes during testing.
-
-**Failure 1: Restating the question as a header.** When the prompt said "give the likely answer", the model would emit `**Likely answer:**` as a labeled heading at the top of the response. Reasoning models treat all-caps section labels in the prompt as output templates. Fix: rewrite the prompt as content guidance ("open with the most likely answer") rather than templated structure ("LIKELY ANSWER: ..."), and explicitly forbid labeled headers.
-
-**Failure 2: Generating more questions when the user clicked a "question" suggestion.** The original prompt said "give 2-3 follow-up questions" for the question type. But the user's intent when clicking a question card is "help me think through this question that I'm about to ask" — they want the likely answer first, then what to listen for, then optional follow-ups. Fix: rewrite the per-type guidance to lead with substance.
-
-**Live-meeting framing.** The prompt opens with: "The user is in a live meeting RIGHT NOW. They have ~10 seconds to read your response before turning back to the conversation." This nudges the model toward concise, scannable prose instead of essay-style depth.
-
-**Style rules.** No markdown headings, no horizontal rules, no labeled section titles, **bold** only mid-sentence for emphasis. Length target: 4-10 sentences.
-
-### Chat prompt — design choices
-
-**Question types.** The prompt declares the four kinds of questions it expects: recall ("what was said about X"), analysis ("what's the strongest counter-argument"), general knowledge ("how does X work"), and judgment ("should I push back"). Naming these explicitly helps the model shape its response style appropriately.
-
-**Citation pattern.** When pulling from the transcript, the prompt instructs natural attribution: "Earlier in the meeting, you/they said..." instead of cold paraphrase. This makes the answer feel grounded.
-
-**Fallback framing.** When the question can't be answered from the transcript: "This isn't in the transcript, but generally..." Explicit framing prevents the model from silently confabulating transcript content.
-
-**Persona.** "Sound like a smart colleague whispering an answer in the user's ear during the meeting." This one line shifted the response style noticeably — less encyclopedic, more conversational.
 
 ### Parameter tuning per call
 
@@ -152,7 +133,7 @@ This expanded after observing two failure modes during testing.
 | Detailed answer (streaming) | medium | 0.5 | 1500 |
 | Chat (streaming) | medium | 0.5 | 1500 |
 
-`reasoning_effort: low` for suggestions because the prompt does the heavy lifting (the framework, the anti-patterns, the type definitions). Extra reasoning doesn't measurably improve output quality on this structured task, and latency is criterion #6 — the user is waiting on the auto-refresh tick.
+`reasoning_effort: low` for suggestions because the prompt does the heavy lifting (the framework, the anti-patterns, the type definitions). Extra reasoning doesn't measurably improve output quality on this structured task, and latency increases.
 
 `reasoning_effort: medium` for detailed answers and chat because these are synthesis tasks across the full transcript. Depth matters, and a 2-3 second response time is acceptable on a click.
 
@@ -218,7 +199,6 @@ Even with Groq's JSON mode, the model can technically return 2 or 4 suggestions,
 - **Free-tier rate limits.** Groq's free tier caps GPT-OSS 120B at a per-minute token budget. Heavy use (rapid suggestion clicks plus auto-refresh in the same minute) will hit this limit. The app handles 429s gracefully with a friendly "Groq rate limit hit. Try again in ~30s." message. Users on Groq Dev tier (300K TPM) won't see this issue.
 - **No speaker diarization.** A single mic stream produces a single transcript without distinguishing speakers. A production version with platform integration (Zoom, Meet) could expose per-speaker channels and tune suggestions per role (defenses when the user is presenting, sharper questions when listening).
 - **Hallucination in fact-checks.** The prompt narrows fact_check to verifiable claims and instructs the model to hedge when uncertain, but the model can still cite specific statistics confidently from training data without verification. This is an inherent LLM limitation.
-- **No transcript summarization for long meetings.** The detailed-answer context is a rolling window. For meetings longer than ~25 minutes, chat answers may lose access to early-meeting context. A production version would summarize older transcript and prepend the summary to the recent window.
 - **Tab backgrounding may delay suggestions.** Browsers throttle `setInterval` when a tab isn't focused. Suggestions may arrive late if the user switches tabs during recording.
 
 ## End-to-end data flow (single 30s cycle)
@@ -241,7 +221,7 @@ Even with Groq's JSON mode, the model can technically return 2 or 4 suggestions,
 16. Markdown is rendered inline by `lib/markdown.ts` on each update.
 17. When Groq is done, the backend emits `data: [DONE]\n\n` and closes the stream.
 
-First-token latency in production: ~ 400ms.
+First-token latency in production: ~ 300ms.
 
 
 ## Links
