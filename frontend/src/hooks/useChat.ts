@@ -15,6 +15,41 @@ type UseChatResult = {
   stopStreaming: () => void;
 };
 
+/**
+ * Convert raw Groq/backend error strings into user-friendly messages.
+ * The most common failure on free-tier Groq is a 429 rate-limit error
+ * with a JSON body — surface it as plain text the user can act on.
+ */
+function formatChatError(raw: string): string {
+  const lower = raw.toLowerCase();
+
+  // Rate limit (Groq free tier: 8K TPM on GPT-OSS 120B)
+  if (lower.includes("rate limit") || lower.includes("429")) {
+    // Try to extract the suggested wait time from Groq's message
+    const waitMatch = raw.match(/try again in ([\d.]+)s/i);
+    const waitSec = waitMatch ? Math.ceil(parseFloat(waitMatch[1])) : null;
+    return waitSec
+      ? `Groq rate limit hit. Please wait ~${waitSec}s and try again.`
+      : "Groq rate limit hit. Please wait ~30s and try again.";
+  }
+
+  // Auth failure
+  if (lower.includes("401") || lower.includes("invalid api key") || lower.includes("missing groq")) {
+    return "Invalid or missing Groq API key. Open Settings to update it.";
+  }
+
+  // Network / backend down
+  if (lower.includes("failed to fetch") || lower.includes("network")) {
+    return "Could not reach the backend. Check your connection.";
+  }
+
+  // Unknown — strip JSON noise but keep the original message
+  if (raw.length > 200) {
+    return raw.slice(0, 200) + "…";
+  }
+  return raw;
+}
+
 function makeId(prefix: string): string {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }
@@ -113,9 +148,12 @@ export function useChat(): UseChatResult {
 
       // 3) Build history for Groq (everything in chat BEFORE this turn).
       //    We don't include the just-appended empty assistant message.
-      const historyForApi: ChatTurnApi[] = chat.map((m) => ({
-        role: m.role,
-        content: m.content,
+      // take the last N turns to keep the context window manageable — for having the control over the information send 
+      const MAX_HISTORY_TURNS = 5;
+      const recentHistory = chat.slice(-MAX_HISTORY_TURNS);
+      const historyForApi: ChatTurnApi[] = recentHistory.map((m) => ({
+      role: m.role,
+      content: m.content,
       }));
 
       // 4) Trim transcript to the configured window.
@@ -136,7 +174,7 @@ export function useChat(): UseChatResult {
           updateChat(assistantId, { content: acc });
         },
         onError: (msg) => {
-          setError(msg);
+        setError(formatChatError(msg));
         },
         onDone: () => {
           setIsStreaming(false);

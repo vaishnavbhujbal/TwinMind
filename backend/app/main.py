@@ -35,7 +35,7 @@ def health():
 
 @app.get("/")
 def root():
-    return {"message": "TwinMind Copilot API. See /api/health."}
+    return {"message": "TwinMind Copilot API"}
 
 
 # Register routers

@@ -102,6 +102,11 @@ export function useAudioRecorder({
     }, chunkMs);
   }, [chunkMs, onChunk]);
 
+
+
+
+  
+
   const start = useCallback(async () => {
     setError(null);
     if (isRecording) return;

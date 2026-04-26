@@ -13,6 +13,43 @@ import { ApiError, transcribeChunk } from "./lib/api";
 import type { Suggestion } from "./types";
 import { buildExport, downloadSessionJson } from "./lib/export";
 
+/**
+ * Decide whether a transcribed chunk carries real content worth appending.
+ * Whisper tends to produce specific hallucinations on silence
+ * ("Thank you.", "Thanks for watching.") — we filter those out client-side
+ * so they don't pollute the transcript or trigger vacuous suggestions.
+ */
+const WHISPER_SILENCE_ARTIFACTS = new Set<string>([
+  "thank you.",
+  "thanks for watching.",
+  "thanks for watching!",
+  "thank you for watching.",
+  "thank you very much.",
+  "thanks.",
+  "thank you.",
+  "you.",
+  "bye.",
+  ".",
+  "..",
+  "...",
+  "...!",
+]);
+
+function isSubstantive(text: string): boolean {
+  const trimmed = text.trim();
+  if (trimmed.length < 15) return false;
+
+  const lower = trimmed.toLowerCase();
+  if (WHISPER_SILENCE_ARTIFACTS.has(lower)) return false;
+
+  // All unique words ≤ 3 suggests noise like "hello hello hello" or
+  // "yeah yeah yeah". 3+ unique words means something was actually said.
+  const uniqueWords = new Set(lower.split(/\s+/).filter(Boolean));
+  if (uniqueWords.size < 3) return false;
+
+  return true;
+}
+
 function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const { settings, hasApiKey } = useSettings();
@@ -39,8 +76,8 @@ function App() {
       pendingManualReloadRef.current = false;
 
       try {
-        const { text } = await transcribeChunk(settings.groq_api_key, blob);
-        if (text) appendTranscript(text);
+      const { text } = await transcribeChunk(settings.groq_api_key, blob);
+      if (text && isSubstantive(text)) appendTranscript(text);
       } catch (e) {
         const msg = e instanceof ApiError ? e.detail : (e as Error).message;
         setTranscribeError(`Transcription failed: ${msg}`);

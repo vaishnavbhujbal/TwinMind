@@ -11,6 +11,23 @@ type UseSuggestionsResult = {
   fetchSuggestions: () => Promise<void>;
 };
 
+
+function formatSuggestionsError(raw: string): string {
+  const lower = raw.toLowerCase();
+  if (lower.includes("rate limit") || lower.includes("429")) {
+    const waitMatch = raw.match(/try again in ([\d.]+)s/i);
+    const waitSec = waitMatch ? Math.ceil(parseFloat(waitMatch[1])) : null;
+    return waitSec
+      ? `Groq rate limit hit. Auto-refresh paused — try again in ~${waitSec}s.`
+      : "Groq rate limit hit. Try again in ~30s.";
+  }
+  if (lower.includes("401") || lower.includes("invalid api key")) {
+    return "Invalid or missing Groq API key. Update it in Settings.";
+  }
+  return `Failed to get suggestions: ${raw.length > 200 ? raw.slice(0, 200) + "…" : raw}`;
+}
+
+
 function makeId(prefix: string): string {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }
@@ -60,8 +77,8 @@ export function useSuggestions(): UseSuggestionsResult {
 
       addBatch(batch);
     } catch (e) {
-      const msg = e instanceof ApiError ? e.detail : (e as Error).message;
-      setError(`Failed to get suggestions: ${msg}`);
+    const msg = e instanceof ApiError ? e.detail : (e as Error).message;
+    setError(formatSuggestionsError(msg));
     } finally {
       setLoading(false);
     }

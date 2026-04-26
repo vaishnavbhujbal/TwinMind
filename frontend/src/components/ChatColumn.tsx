@@ -73,8 +73,7 @@ export default function ChatColumn({
           <div className="rounded-md border border-border bg-bg-card px-3 py-3">
             <p className="text-xs text-text-muted leading-relaxed">
               Clicking a suggestion adds it to this chat and streams a detailed
-              answer (separate prompt, more context). You can also type questions
-              directly. One continuous chat per session — no login, no persistence.
+              answer. You can also type questions directly.
             </p>
           </div>
         </div>

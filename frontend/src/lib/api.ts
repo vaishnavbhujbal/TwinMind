@@ -111,6 +111,7 @@ export async function getSuggestions(
   transcript: string,
   prompt: string,
   reasoningEffort: ReasoningEffortApi = "low",
+  recentSuggestions: string[] = [],
 ): Promise<SuggestionsResponse> {
   if (!apiKey) throw new ApiError(401, "Missing Groq API key.");
 
@@ -124,6 +125,7 @@ export async function getSuggestions(
       transcript,
       prompt,
       reasoning_effort: reasoningEffort,
+      recent_suggestions: recentSuggestions,
     }),
   });
 

@@ -117,7 +117,7 @@ function BatchBlock({
   isLatest: boolean;
   onClick: (s: Suggestion) => void;
 }) {
-  const opacity = isLatest ? "opacity-100" : "opacity-60";
+  const opacity = isLatest ? "opacity-100" : "opacity-70";
 
   return (
     <div className={`space-y-2 transition-opacity ${opacity}`}>

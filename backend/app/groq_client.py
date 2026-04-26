@@ -112,6 +112,7 @@ def chat_completion_json(
         ],
         "reasoning_effort": reasoning_effort,
         "temperature": temperature,
+        "max_tokens": 800,
         "stream": False,
     }
 
@@ -173,6 +174,7 @@ def chat_completion_stream(
         ],
         "reasoning_effort": reasoning_effort,
         "temperature": temperature,
+        "max_tokens": 1500,
         "stream": True,
     }
 

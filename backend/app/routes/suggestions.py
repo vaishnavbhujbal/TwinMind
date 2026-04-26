@@ -28,6 +28,10 @@ class SuggestionsRequestBody(BaseModel):
     transcript: str
     prompt: str
     reasoning_effort: ReasoningEffort = "low"
+    # Previews of suggestions from the last 1-2 batches, so the model can
+    # avoid repeating itself. Optional — older clients or first batches
+    # will simply not pass this.
+    recent_suggestions: list[str] = []
 
 
 class SuggestionsResponseBody(BaseModel):
@@ -62,7 +66,7 @@ async def suggestions(
             detail=f"Transcript too short ({len(transcript)} chars). Keep talking.",
         )
 
-    user_content = _build_user_message(transcript)
+    user_content = _build_user_message(transcript, body.recent_suggestions)
 
     try:
         raw = chat_completion_json(
@@ -83,19 +87,36 @@ async def suggestions(
 
 # --- Helpers -----------------------------------------------------------------
 
-def _build_user_message(transcript: str) -> str:
+def _build_user_message(transcript: str, recent_suggestions: list[str]) -> str:
     """
     The user-turn content. Kept separate from the system prompt so the
     user-editable 'prompt' field stays focused on instructions, not data.
+
+    If recent_suggestions is non-empty, we include them so the model can
+    avoid surfacing near-duplicate suggestions across consecutive batches.
     """
-    return (
-        "TRANSCRIPT (most recent conversation, verbatim):\n"
-        "---\n"
-        f"{transcript}\n"
-        "---\n\n"
-        "Generate EXACTLY 3 suggestions as specified. Return only the JSON "
-        "object — no preamble, no markdown fences."
-    )
+    parts: list[str] = [
+        "TRANSCRIPT (most recent conversation, verbatim):",
+        "---",
+        transcript,
+        "---",
+    ]
+
+    if recent_suggestions:
+        parts.extend([
+            "",
+            "RECENTLY SUGGESTED (do NOT repeat these or close variants):",
+            *[f"- {s}" for s in recent_suggestions],
+        ])
+
+    parts.extend([
+        "",
+        "Generate EXACTLY 3 suggestions as specified. They must be DIFFERENT "
+        "angles from anything in 'RECENTLY SUGGESTED' above. Return only the "
+        "JSON object — no preamble, no markdown fences.",
+    ])
+
+    return "\n".join(parts)
 
 
 def _parse_and_normalize(raw: str) -> list[Suggestion]:
@@ -139,6 +160,14 @@ def _parse_and_normalize(raw: str) -> list[Suggestion]:
         )
 
     # Pad if the model returned fewer than 3 (rare with JSON mode, but safe).
+    # Zero suggestions is a valid response — means the model deemed the
+    # transcript non-substantive and chose not to generate. The frontend
+    # interprets this as "skip this batch" rather than showing stale content.
+    if len(normalized) == 0:
+        return []
+
+    # Pad only if the model tried to produce suggestions but fell short
+    # (rare with JSON mode, but safe).
     while len(normalized) < 3:
         normalized.append(
             Suggestion(
