@@ -236,12 +236,12 @@ Even with Groq's JSON mode, the model can technically return 2 or 4 suggestions,
 11. User clicks a suggestion card → `useChat.expandSuggestion(sug)` runs.
 12. The preview becomes the user's chat bubble. An empty assistant bubble appears below it.
 13. `streamChat()` POSTs to `/api/chat` with the detailed prompt, the last 15,000 chars of transcript, the last 5 chat turns, and the suggestion's preview + detail_seed.
-14. Backend's `routes/chat.py` opens an SSE stream, calls `chat_completion_stream()` which streams Groq tokens as `data: {"token": "..."}\n\n` frames.
+14. Backend's `routes/chat.py` opens an SSE stream,  calls `chat_completion_stream()` which streams Groq tokens as `data: {"token": "..."}\n\n` frames.
 15. Frontend's SSE reader parses each frame, calls `onToken` per token. `useChat` accumulates and `updateChat()`s the assistant message — the UI re-renders progressively as text streams in.
 16. Markdown is rendered inline by `lib/markdown.ts` on each update.
 17. When Groq is done, the backend emits `data: [DONE]\n\n` and closes the stream.
 
-First-token latency in production: ~400ms.
+First-token latency in production: ~ 400ms.
 
 
 ## Links
