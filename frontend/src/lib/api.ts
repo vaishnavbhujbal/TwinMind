@@ -6,11 +6,11 @@
  * never reads storage directly, so it stays easy to test and reason about.
  */
 
-// Vite replaces import.meta.env.VITE_API_BASE at build time. For local dev
-// we fall back to the FastAPI default.
-const API_BASE =
-  (import.meta.env.VITE_API_BASE as string | undefined) ?? "http://localhost:8000";
 
+// Vite injects env vars prefixed with VITE_ at build time.
+// In dev, falls back to localhost so `npm run dev` works without a .env file.
+// In production (Vercel), set VITE_API_BASE to your Railway backend URL.
+const API_BASE = import.meta.env.VITE_API_BASE ?? "http://localhost:8000";
 
 export class ApiError extends Error {
   status: number;
