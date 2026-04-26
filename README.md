@@ -1,6 +1,6 @@
 # TwinMind Copilot
 
-A live meeting copilot that listens to your microphone, transcribes the conversation, and surfaces three context-aware suggestions every ~45 seconds. Click any suggestion to expand it into a detailed chat answer, or type your own questions while the meeting is happening.
+A live meeting copilot that listens to your microphone, transcribes the conversation, and surfaces three context-aware suggestions every ~30 seconds. Click any suggestion to expand it into a detailed chat answer, or type your own questions while the meeting is happening.
 
 Built as a take-home assignment for the TwinMind Full Stack / Prompt Engineer role.
 
